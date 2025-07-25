@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Star Tunnel Grid</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 3000px;
+            overflow-x: hidden;
+            background: linear-gradient(to bottom, #04042f, #0a1a68);
+            opacity: .999;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            display: block;
+        }
+
+        .counter-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            font-family: sans-serif;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .number {
+            font-size: 100px;
+            font-weight: bold;
+        }
+
+        .label {
+            font-size: 20px;
+            opacity: 0.7;
+        }
+
+        .cursor {
+            position: fixed;
+            border: 1px solid rgba(255, 255, 255, 0.4); /* тонший край */
+            border-radius: 50%;
+            pointer-events: none;
+            transition: all 0.2s ease;
+            width: 40px;  /* більший розмір */
+            height: 40px;
+            z-index: 10000;
+        }
+
+        .counter {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .digit {
+            width: 50px;
+            height: 70px;
+            overflow: hidden;
+            font-size: 64px;
+            position: relative;
+        }
+
+        .numbers {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            font-size: 64px;
+        }
+
+        .numbers span {
+            display: block;
+            height: 70px;
+            text-align: center;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="cursor" id="cursor"></div>
+<canvas id="starCanvas"></canvas>
+
+<div class="counter-container">
+<!--    <div class="number" id="counter">0000</div>-->
+    <div class="counter" id="counter"></div>
+    <div class="label">Aleph simulates 4000 treatments per second</div>
+</div>
+
+<script src="https://unpkg.com/lenis@1.3.8/dist/lenis.min.js"></script>
+<!-- Odometer CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/odometer.js/0.4.8/themes/odometer-theme-default.min.css" />
+
+<!-- Odometer JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/odometer.js/0.4.8/odometer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+<script>
+    const lenis = new Lenis()
+    function raf(time) {
+        lenis.raf(time)
+        requestAnimationFrame(raf)
+    }
+    requestAnimationFrame(raf)
+
+    const canvas = document.getElementById('starCanvas')
+    const ctx = canvas.getContext('2d')
+
+    function resizeCanvas() {
+        canvas.width = window.innerWidth
+        canvas.height = window.innerHeight
+    }
+    resizeCanvas()
+    window.addEventListener('resize', resizeCanvas)
+
+    let scrollY = 0
+    let lastScrollY = 0
+    let scrollSpeed = 0
+    let scrollSpeedSmoothed = 0;
+
+    let targetParallaxX = 0, targetParallaxY = 0;
+    let parallaxX = 0, parallaxY = 0;
+
+    const gridCols = 7;
+    const gridRows = 5;
+    const gridDepth = 15;
+
+    const gridSpacingX = window.innerWidth / (gridCols - 3);
+    const gridSpacingY = window.innerHeight / (gridRows - 3);
+    const gridSpacingZ = 70;
+
+    let stars = []
+
+    document.addEventListener('mousemove', (e) => {
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        const offsetX = (e.clientX - centerX) / centerX;
+        const offsetY = (e.clientY - centerY) / centerY;
+
+        targetParallaxX = -offsetX * 50;
+        targetParallaxY = -offsetY * 50;
+    });
+
+    function createInfiniteGrid() {
+        stars = []
+        const verticalRange = 3000
+        for (let z = 0; z < gridDepth; z++) {
+            for (let y = -verticalRange; y < verticalRange; y += gridSpacingY) {
+                for (let x = -2; x < gridCols + 2; x++) {
+                    stars.push({
+                        x: (x - gridCols / 2) * gridSpacingX,
+                        y: y,
+                        z: z * gridSpacingZ,
+                        radius: 3 - z * 0.2 + Math.random() * 0.5
+                    })
+                }
+            }
+        }
+    }
+    createInfiniteGrid()
+
+    lenis.on('scroll', ({ scroll }) => {
+        scrollY = scroll
+    })
+
+    function lerp(a, b, t) {
+        return a + (b - a) * t;
+    }
+
+    const meteors = [];
+    const METEOR_COUNT = 80;
+
+    function createMeteor() {
+        const from = stars[Math.floor(Math.random() * stars.length)];
+        const to = stars[Math.floor(Math.random() * stars.length)];
+        if (from === to) return;
+
+        meteors.push({
+            from: { x: from.x, y: from.y },
+            to: { x: to.x, y: to.y },
+            progress: 0,
+            speed: 0.002 + Math.random() * 0.003
+        });
+    }
+
+    for (let i = 0; i < METEOR_COUNT; i++) {
+        createMeteor();
+    }
+
+    function updateMeteors() {
+        for (let i = meteors.length - 1; i >= 0; i--) {
+            const m = meteors[i];
+            m.progress += m.speed;
+            if (m.progress >= 1) {
+                meteors.splice(i, 1);
+                setTimeout(createMeteor, Math.random() * 2000);
+            }
+        }
+    }
+
+    function drawMeteors() {
+        const focalLength = canvas.height / 2;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+
+        for (const m of meteors) {
+            const x = lerp(m.from.x, m.to.x, m.progress);
+            const y = lerp(m.from.y, m.to.y, m.progress);
+
+            const scale = focalLength / (focalLength + 0);
+            const x2d = x * scale + centerX + parallaxX;
+            const y2d = y * scale + centerY + parallaxY;
+
+            const tailX = lerp(m.from.x, m.to.x, m.progress - 0.05);
+            const tailY = lerp(m.from.y, m.to.y, m.progress - 0.05);
+            const tail2dX = tailX * scale + centerX + parallaxX;
+            const tail2dY = tailY * scale + centerY + parallaxY;
+
+            const grad = ctx.createLinearGradient(tail2dX, tail2dY, x2d, y2d);
+            grad.addColorStop(0, 'rgba(255,255,255,0)');
+            grad.addColorStop(1, 'rgba(255,255,255,0.8)');
+
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(tail2dX, tail2dY);
+            ctx.lineTo(x2d, y2d);
+            ctx.stroke();
+        }
+    }
+
+    function drawStars() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+        const focalLength = canvas.height / 2
+        const centerX = canvas.width / 2
+        const centerY = canvas.height / 2
+
+        scrollSpeed = scrollY - lastScrollY
+        lastScrollY = scrollY
+        scrollSpeedSmoothed = lerp(scrollSpeedSmoothed, scrollSpeed, 0.1)
+
+        parallaxX = lerp(parallaxX, targetParallaxX, 0.05)
+        parallaxY = lerp(parallaxY, targetParallaxY, 0.05)
+
+        for (let i = 0; i < stars.length; i++) {
+            const star = stars[i]
+
+            star.y += scrollSpeedSmoothed * 2
+
+            if (star.y > 3000) star.y -= 6000
+            else if (star.y < -3000) star.y += 6000
+
+            const scale = focalLength / (focalLength + star.z)
+            const x2d = star.x * scale + centerX + parallaxX;
+            const y2d = star.y * scale + centerY + parallaxY;
+
+            const depthFactor = 1 + (1 - star.z / (gridDepth * gridSpacingZ)) * 1.5
+            const radius = star.radius * scale * depthFactor
+
+            const trailLength = scrollSpeedSmoothed * 3;
+            const trailY = y2d - trailLength;
+
+            const gradient = ctx.createLinearGradient(x2d, y2d, x2d, trailY);
+            gradient.addColorStop(0, 'rgba(255,255,255,0.8)');
+            gradient.addColorStop(1, 'rgba(255,255,255,0)');
+
+            ctx.beginPath();
+            ctx.moveTo(x2d, y2d);
+            ctx.lineTo(x2d, trailY);
+            ctx.strokeStyle = gradient;
+            ctx.lineWidth = radius * 0.8;
+            ctx.stroke();
+
+            const glowRadius = radius * 3;
+            const glow = ctx.createRadialGradient(x2d, y2d, 0, x2d, y2d, glowRadius);
+            glow.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+            glow.addColorStop(0.3, 'rgba(255, 200, 100, 0.3)');
+            glow.addColorStop(1, 'rgba(255, 150, 50, 0)');
+
+            ctx.beginPath();
+            ctx.arc(x2d, y2d, glowRadius, 0, Math.PI * 2);
+            ctx.fillStyle = glow;
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(x2d, y2d, radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+        }
+
+        updateMeteors();
+        drawMeteors();
+        requestAnimationFrame(drawStars);
+    }
+
+    drawStars();
+
+    requestAnimationFrame(function raf(time) {
+        lenis.raf(time);
+        requestAnimationFrame(raf);
+    });
+
+    const counterEl = document.getElementById('counter');
+    const numDigits = 4;
+    const digitHeight = 70;
+    const totalSteps = 4000;
+
+    let currentDigits = [];
+
+    function createDigitElement() {
+        const digitEl = document.createElement('div');
+        digitEl.className = 'digit';
+
+        const numbers = document.createElement('div');
+        numbers.className = 'numbers';
+
+        // повторимо цифри кілька разів для ілюзії циклічності
+        for (let i = 0; i < 3; i++) {
+            for (let d = 0; d < 10; d++) {
+                const span = document.createElement('span');
+                span.textContent = d;
+                numbers.appendChild(span);
+            }
+        }
+
+        digitEl.appendChild(numbers);
+        return { digitEl, numbers };
+    }
+
+    const digits = [];
+
+    for (let i = 0; i < numDigits; i++) {
+        const { digitEl, numbers } = createDigitElement();
+        counterEl.appendChild(digitEl);
+        digits.push({ el: numbers, current: 0 });
+    }
+
+    function updateCounter(value) {
+        const padded = value.toString().padStart(numDigits, '0');
+
+        padded.split('').forEach((char, i) => {
+            const targetDigit = parseInt(char);
+            const digitObj = digits[i];
+
+            let offset = (10 + targetDigit) * digitHeight; // середній набір цифр (10–19)
+            gsap.to(digitObj.el, {
+                y: -offset,
+                duration: 0.6,
+                ease: "power2.out"
+            });
+        });
+    }
+
+    let lastValue = -1;
+
+    lenis.on('scroll', ({ scroll }) => {
+        const maxScroll = document.body.scrollHeight - window.innerHeight;
+        const progress = scroll / maxScroll;
+        const value = Math.floor(progress * totalSteps);
+
+        if (value !== lastValue) {
+            updateCounter(value);
+            lastValue = value;
+        }
+    });
+
+    // const counter = document.getElementById('counter')
+    // const max = 4000
+    // let displayedValue = 0
+    //
+    // function animateCounter(target) {
+    //     const step = () => {
+    //         const diff = target - displayedValue
+    //         if (Math.abs(diff) < 1) {
+    //             displayedValue = target
+    //             counter.textContent = target.toString().padStart(4, '0')
+    //             return
+    //         }
+    //         displayedValue += diff * 0.2
+    //         counter.textContent = Math.floor(displayedValue).toString().padStart(4, '0')
+    //         requestAnimationFrame(step)
+    //     }
+    //     step()
+    // }
+    //
+    // lenis.on('scroll', ({ scroll }) => {
+    //     const maxScroll = document.body.scrollHeight - window.innerHeight
+    //     const progress = Math.min(scroll / maxScroll, 1)
+    //     const value = Math.floor(progress * max)
+    //     animateCounter(value)
+    // })
+
+    const cursor = document.getElementById('cursor');
+    let mouseX = 0, mouseY = 0, cursorX = 0, cursorY = 0;
+
+    // Отримаємо розмір курсора
+    const cursorSize = cursor.offsetWidth / 2;
+
+    window.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+    });
+
+    function animateCursor() {
+        cursorX += (mouseX - cursorX) * 0.5;
+        cursorY += (mouseY - cursorY) * 0.5;
+
+        // Вирахуємо позицію так, щоб центр круга був під мишкою
+        cursor.style.transform = `translate(${cursorX - cursorSize}px, ${cursorY - cursorSize}px)`;
+
+        requestAnimationFrame(animateCursor);
+    }
+    animateCursor()
+</script>
+
+</body>
+</html>
