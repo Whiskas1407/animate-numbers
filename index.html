@@ -105,8 +105,11 @@
 <!-- Odometer JS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/odometer.js/0.4.8/odometer.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+
 
 <script>
+
     const lenis = new Lenis()
     function raf(time) {
         lenis.raf(time)
@@ -348,33 +351,50 @@
     }
 
     function updateCounter(value) {
-        const padded = value.toString().padStart(numDigits, '0');
+        const padded = value.toFixed(4).padStart(numDigits + 5, '0'); // більше знаків для плавного ефекту
 
-        padded.split('').forEach((char, i) => {
-            const targetDigit = parseInt(char);
+        padded.slice(-numDigits).split('').forEach((char, i) => {
             const digitObj = digits[i];
+            const fullValue = parseFloat(value.toFixed(4)); // зберігаємо значення з точністю
 
-            let offset = (10 + targetDigit) * digitHeight; // середній набір цифр (10–19)
+            const multiplier = Math.pow(10, numDigits - i - 1);
+            const digitFloat = (fullValue / multiplier) % 10;
+
+            const base = Math.floor(digitFloat); // поточна цифра
+            const fraction = digitFloat - base;
+
+            // зміщення між цифрами (основа + частинка наступної)
+            const offset = (10 + base + fraction) * digitHeight;
+
             gsap.to(digitObj.el, {
                 y: -offset,
-                duration: 0.6,
-                ease: "power2.out"
+                duration: 0.2,
+                ease: "linear"
             });
         });
     }
 
+
     let lastValue = -1;
 
-    lenis.on('scroll', ({ scroll }) => {
-        const maxScroll = document.body.scrollHeight - window.innerHeight;
-        const progress = scroll / maxScroll;
-        const value = Math.floor(progress * totalSteps);
+    let counterValue = { val: 0 };
+    gsap.registerPlugin(ScrollTrigger);
 
-        if (value !== lastValue) {
-            updateCounter(value);
-            lastValue = value;
+    gsap.to(counterValue, {
+        val: totalSteps,
+        ease: "none",
+        scrollTrigger: {
+            trigger: document.body,
+            start: "top top",
+            end: "bottom bottom",
+            scrub: 0.1,
+            onUpdate: () => {
+                updateCounter(counterValue.val); // передаємо значення з десятковою точністю
+            }
         }
     });
+
+
 
     // const counter = document.getElementById('counter')
     // const max = 4000
